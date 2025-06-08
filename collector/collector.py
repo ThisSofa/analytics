@@ -29,7 +29,7 @@ STATIONS = {
 }
 
 def ensure_table():
-    print(f"Current Date and Time (UTC): {date.today()} - Ensuring table exists...")
+    print(f"Current Date and Time (UTC): {datetime.now()} - Ensuring table exists...")
     try:
         conn = psycopg2.connect(
             host=POSTGRES_HOST,
@@ -38,30 +38,62 @@ def ensure_table():
             password=POSTGRES_PASSWORD
         )
         cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS weather_history (
-                id SERIAL PRIMARY KEY,
-                city VARCHAR(64),
-                dt DATE,
-                tavg REAL,
-                tmin REAL,
-                tmax REAL,
-                prcp REAL,
-                snow INTEGER,
-                wdir INTEGER,
-                wspd REAL,
-                wpgt REAL,
-                pres REAL,
-                tsun INTEGER,
-                raw_json JSONB
-            );
-        """)
+        
+        # Проверяем существование таблицы
+        cur.execute("SELECT to_regclass('public.weather_history')")
+        table_exists = cur.fetchone()[0] is not None
+        
+        if table_exists:
+            print("Table weather_history exists, checking structure...")
+            # Проверяем структуру таблицы
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'weather_history'")
+            columns = [row[0] for row in cur.fetchall()]
+            print(f"Existing columns: {columns}")
+            
+            # Проверяем, есть ли столбец raw_json
+            if 'raw_json' in columns:
+                print("Column raw_json exists but is no longer needed. Dropping and recreating table.")
+                cur.execute("DROP TABLE weather_history")
+                table_exists = False
+            else:
+                # Проверяем наличие необходимых столбцов
+                required_columns = ['tavg', 'tmin', 'tmax', 'prcp', 'snow', 'wdir', 'wspd', 'wpgt', 'pres', 'tsun']
+                missing = [col for col in required_columns if col not in columns]
+                
+                if missing:
+                    print(f"Missing columns: {missing}. Dropping and recreating the table.")
+                    cur.execute("DROP TABLE weather_history")
+                    table_exists = False
+        
+        if not table_exists:
+            print("Creating weather_history table without raw_json column...")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS weather_history (
+                    id SERIAL PRIMARY KEY,
+                    city VARCHAR(64),
+                    dt DATE,
+                    tavg REAL,
+                    tmin REAL,
+                    tmax REAL,
+                    prcp REAL,
+                    snow INTEGER,
+                    wdir INTEGER,
+                    wspd REAL,
+                    wpgt REAL,
+                    pres REAL,
+                    tsun INTEGER
+                );
+            """)
+            print("Table created successfully.")
+        
         conn.commit()
         cur.close()
         conn.close()
-        print(f"Current Date and Time (UTC): {date.today()} - Table ensured successfully.")
+        print(f"Current Date and Time (UTC): {datetime.now()} - Table structure ensured successfully.")
     except Exception as e:
-        print(f"Current Date and Time (UTC): {date.today()} - Error ensuring table: {e}")
+        print(f"Current Date and Time (UTC): {datetime.now()} - Error ensuring table: {e}")
+        import traceback
+        traceback.print_exc()
 
 def get_historical_weather(city, station, days=30):
     print(f"Fetching historical weather for {city}...")
@@ -91,54 +123,60 @@ def save_weather_to_db(city, weather_data):
             user=POSTGRES_USER,
             password=POSTGRES_PASSWORD
         )
+        
+        # Устанавливаем autocommit, чтобы избежать блокировки транзакции при ошибках
+        conn.autocommit = True
         cur = conn.cursor()
+        
         for day_data in weather_data.get("data", []):
             try:
-                dt_str = day_data["date"]
-                if " " in dt_str: 
+                dt_str = day_data["date"]  # Может быть в формате YYYY-MM-DD или YYYY-MM-DD HH:MM:SS
+                
+                # Логируем сырые данные даты
+                print(f"Raw date from API: {dt_str}")
+                
+                # Определяем формат даты и преобразуем
+                if " " in dt_str:
                     dt_obj = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").date()
                 else:
                     dt_obj = datetime.strptime(dt_str, "%Y-%m-%d").date()
-                    
-                tavg = day_data.get("tavg")
-                tmin = day_data.get("tmin")
-                tmax = day_data.get("tmax")
-                prcp = day_data.get("prcp")
-                snow = day_data.get("snow")
-                wdir = day_data.get("wdir")
-                wspd = day_data.get("wspd")
-                wpgt = day_data.get("wpgt")
-                pres = day_data.get("pres")
-                tsun = day_data.get("tsun")
+                
+                # Выполняем вставку данных без raw_json
                 cur.execute("""
                     INSERT INTO weather_history (
-                        city, dt, tavg, tmin, tmax, prcp, snow, wdir, wspd, wpgt, pres, tsun, raw_json
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        city, dt, tavg, tmin, tmax, prcp, snow, wdir, wspd, wpgt, pres, tsun
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT DO NOTHING
                 """, (
                     city,
                     dt_obj,
-                    tavg,
-                    tmin,
-                    tmax,
-                    prcp,
-                    snow,
-                    wdir,
-                    wspd,
-                    wpgt,
-                    pres,
-                    tsun,
-                    json.dumps(day_data)
+                    day_data.get("tavg"),
+                    day_data.get("tmin"),
+                    day_data.get("tmax"),
+                    day_data.get("prcp"),
+                    day_data.get("snow"),
+                    day_data.get("wdir"),
+                    day_data.get("wspd"),
+                    day_data.get("wpgt"),
+                    day_data.get("pres"),
+                    day_data.get("tsun")
                 ))
+                
+                print(f"Inserted data for {city}, date {dt_obj}")
+                
             except Exception as e:
                 print(f"Error inserting data for {city}, date {day_data.get('date')}: {e}")
-                continue
-        conn.commit()
+                import traceback
+                traceback.print_exc()
+                # Продолжаем с следующей записью, без прерывания транзакции
+        
         cur.close()
         conn.close()
-        print(f"Weather data saved for {city}.")
+        print(f"Weather data processing completed for {city}.")
     except Exception as e:
-        print(f"Error saving weather data for {city}: {e}")
+        print(f"Error in database connection for {city}: {e}")
+        import traceback
+        traceback.print_exc()
 
 def collect_and_store():
     print(f"Starting data collection and storage...")
