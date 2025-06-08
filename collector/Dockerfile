@@ -16,4 +16,4 @@ RUN addgroup --system app && \
 USER app
 
 # Запускаем наш пылесос
-CMD ["python", "collector.py"]
+CMD ["python", "-u", "collector.py"]
