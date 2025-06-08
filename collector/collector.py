@@ -94,8 +94,12 @@ def save_weather_to_db(city, weather_data):
         cur = conn.cursor()
         for day_data in weather_data.get("data", []):
             try:
-                dt_str = day_data["date"]  # формат YYYY-MM-DD
-                dt_obj = datetime.strptime(dt_str, "%Y-%m-%d").date()
+                dt_str = day_data["date"]
+                if " " in dt_str: 
+                    dt_obj = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").date()
+                else:
+                    dt_obj = datetime.strptime(dt_str, "%Y-%m-%d").date()
+                    
                 tavg = day_data.get("tavg")
                 tmin = day_data.get("tmin")
                 tmax = day_data.get("tmax")
