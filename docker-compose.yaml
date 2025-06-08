@@ -86,7 +86,7 @@ services:
     container_name: weather_collector
     restart: always
     environment:
-      - VISUALCROSSING_API_KEY=${VISUALCROSSING_API_KEY}
+      - METEOSTAT_RAPIDAPI_KEY=${METEOSTAT_RAPIDAPI_KEY}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}

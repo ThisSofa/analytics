@@ -63,7 +63,7 @@ def ensure_table():
     except Exception as e:
         print(f"Current Date and Time (UTC): {date.today()} - Error ensuring table: {e}")
 
-def get_historical_weather(city, station, days=30, max_retries=3):
+def get_historical_weather(city, station, days=30):
     print(f"Fetching historical weather for {city}...")
     end_date = date.today()
     start_date = end_date - timedelta(days=days-1)
@@ -73,21 +73,14 @@ def get_historical_weather(city, station, days=30, max_retries=3):
         "x-rapidapi-key": METEOSTAT_RAPIDAPI_KEY
     }
     print(f"API URL: {url}")
-    for attempt in range(max_retries):
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            print(f"API request successful for {city}.")
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"API request failed for {city}, attempt {attempt+1}: {e}")
-            if attempt == max_retries - 1:
-                print(f"Max retries reached for {city}.")
-                return None
-            delay = 2 ** attempt
-            print(f"Waiting {delay} seconds before retrying...")
-            time.sleep(delay)
-    return None
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        print(f"API request successful for {city}.")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"API request failed for {city}: {e}")
+        return None
 
 def save_weather_to_db(city, weather_data):
     print(f"Saving weather data for city: {city}")
