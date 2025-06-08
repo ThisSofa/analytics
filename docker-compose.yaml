@@ -41,18 +41,6 @@ services:
     ports:
       - "9100:9100"
 
-  postgres_exporter:
-    image: prometheuscommunity/postgres-exporter
-    container_name: postgres_exporter
-    environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=${POSTGRES_SSL_MODE}"
-      PG_EXPORTER_AUTO_DISCOVER_DATABASES: "${PG_EXPORTER_AUTO_DISCOVER_DATABASES}"
-    restart: always
-    networks:
-      - analytics
-    expose:
-      - "9187"
-
   nginx:
     image: nginx:latest
     container_name: nginx_prometheus_auth
@@ -97,3 +85,4 @@ networks:
 
 volumes:
   postgres_data:
+    driver: local
