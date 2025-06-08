@@ -2,33 +2,34 @@ import os
 import time
 import requests
 import psycopg2
-from datetime import datetime, timedelta
+from datetime import date, timedelta, datetime
 from dotenv import load_dotenv
 import schedule
 import json
 
-print("Starting weather collector script...")
+print("Starting Meteostat weather collector script...")
 load_dotenv()
 print("Environment variables loaded.")
 
-VISUALCROSSING_API_KEY = os.getenv('VISUALCROSSING_API_KEY')
+METEOSTAT_RAPIDAPI_KEY = os.getenv('METEOSTAT_RAPIDAPI_KEY')
 POSTGRES_HOST = os.getenv('POSTGRES_HOST', 'db')
 POSTGRES_DB = os.getenv('POSTGRES_DB', 'weather')
 POSTGRES_USER = os.getenv('POSTGRES_USER', 'weatheruser')
 POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'weatherpass')
 
-print(f"VISUALCROSSING_API_KEY: {VISUALCROSSING_API_KEY}")
+print(f"METEOSTAT_RAPIDAPI_KEY: {METEOSTAT_RAPIDAPI_KEY}")
 print(f"POSTGRES_HOST: {POSTGRES_HOST}")
 print(f"POSTGRES_DB: {POSTGRES_DB}")
 print(f"POSTGRES_USER: {POSTGRES_USER}")
 
-CITIES = {
-    "Kyiv": (50.4501, 30.5234),
-    "Dnipro": (48.4647, 35.0462)
+STATIONS = {
+    "Vienna": "11035",   # Wien/Hohe Warte
+    "Berlin": "10382",   # Berlin-Tegel
+    "Paris": "07156"     # Paris-Montsouris
 }
 
 def ensure_table():
-    print(f"Current Date and Time (UTC): {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} - Ensuring table exists...")
+    print(f"Current Date and Time (UTC): {date.today()} - Ensuring table exists...")
     try:
         conn = psycopg2.connect(
             host=POSTGRES_HOST,
@@ -41,45 +42,47 @@ def ensure_table():
             CREATE TABLE IF NOT EXISTS weather_history (
                 id SERIAL PRIMARY KEY,
                 city VARCHAR(64),
-                dt TIMESTAMP,
-                temp REAL,
-                humidity INTEGER,
-                pressure REAL,
-                windspeed REAL,
-                winddir REAL,
-                cloudcover INTEGER,
-                solarradiation REAL,
-                precip REAL,
-                description TEXT,
+                dt DATE,
+                tavg REAL,
+                tmin REAL,
+                tmax REAL,
+                prcp REAL,
+                snow INTEGER,
+                wdir INTEGER,
+                wspd REAL,
+                wpgt REAL,
+                pres REAL,
+                tsun INTEGER,
                 raw_json JSONB
             );
         """)
         conn.commit()
         cur.close()
         conn.close()
-        print(f"Current Date and Time (UTC): {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} - Table ensured successfully.")
+        print(f"Current Date and Time (UTC): {date.today()} - Table ensured successfully.")
     except Exception as e:
-        print(f"Current Date and Time (UTC): {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} - Error ensuring table: {e}")
+        print(f"Current Date and Time (UTC): {date.today()} - Error ensuring table: {e}")
 
-def get_historical_weather(city_name, lat, lon, days=14, max_retries=3):
-    print(f"Fetching historical weather for {city_name}...")
-    end_date = datetime.utcnow().date()
+def get_historical_weather(city, station, days=30, max_retries=3):
+    print(f"Fetching historical weather for {city}...")
+    end_date = date.today()
     start_date = end_date - timedelta(days=days-1)
-    url = (
-        f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/"
-        f"{lat},{lon}/{start_date}/{end_date}?unitGroup=metric&key={VISUALCROSSING_API_KEY}&contentType=json"
-    )
+    url = f"https://meteostat.p.rapidapi.com/stations/daily?station={station}&start={start_date}&end={end_date}&units=metric"
+    headers = {
+        "x-rapidapi-host": "meteostat.p.rapidapi.com",
+        "x-rapidapi-key": METEOSTAT_RAPIDAPI_KEY
+    }
     print(f"API URL: {url}")
     for attempt in range(max_retries):
         try:
-            response = requests.get(url)
+            response = requests.get(url, headers=headers)
             response.raise_for_status()
-            print(f"API request successful for {city_name}.")
+            print(f"API request successful for {city}.")
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"API request failed for {city_name}, attempt {attempt+1}: {e}")
+            print(f"API request failed for {city}, attempt {attempt+1}: {e}")
             if attempt == max_retries - 1:
-                print(f"Max retries reached for {city_name}.")
+                print(f"Max retries reached for {city}.")
                 return None
             delay = 2 ** attempt
             print(f"Waiting {delay} seconds before retrying...")
@@ -96,36 +99,38 @@ def save_weather_to_db(city, weather_data):
             password=POSTGRES_PASSWORD
         )
         cur = conn.cursor()
-        for day_data in weather_data["days"]:
+        for day_data in weather_data.get("data", []):
             try:
-                dt_str = day_data["datetime"]
-                dt_obj = datetime.strptime(dt_str, "%Y-%m-%d")
-                temp = day_data.get("temp")
-                humidity = day_data.get("humidity")
-                pressure = day_data.get("pressure")
-                windspeed = day_data.get("windspeed")
-                winddir = day_data.get("winddir")
-                cloudcover = day_data.get("cloudcover")
-                solarradiation = day_data.get("solarradiation")
-                precip = day_data.get("precip")
-                description = day_data.get("description")
+                dt_str = day_data["date"]
+                dt_obj = datetime.strptime(dt_str, "%Y-%m-%d").date()
+                tavg = day_data.get("tavg")
+                tmin = day_data.get("tmin")
+                tmax = day_data.get("tmax")
+                prcp = day_data.get("prcp")
+                snow = day_data.get("snow")
+                wdir = day_data.get("wdir")
+                wspd = day_data.get("wspd")
+                wpgt = day_data.get("wpgt")
+                pres = day_data.get("pres")
+                tsun = day_data.get("tsun")
                 cur.execute("""
                     INSERT INTO weather_history (
-                        city, dt, temp, humidity, pressure, windspeed, winddir, cloudcover, solarradiation, precip, description, raw_json
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        city, dt, tavg, tmin, tmax, prcp, snow, wdir, wspd, wpgt, pres, tsun, raw_json
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT DO NOTHING
                 """, (
                     city,
                     dt_obj,
-                    temp,
-                    humidity,
-                    pressure,
-                    windspeed,
-                    winddir,
-                    cloudcover,
-                    solarradiation,
-                    precip,
-                    description,
+                    tavg,
+                    tmin,
+                    tmax,
+                    prcp,
+                    snow,
+                    wdir,
+                    wspd,
+                    wpgt,
+                    pres,
+                    tsun,
                     json.dumps(day_data)
                 ))
             except Exception as e:
@@ -141,9 +146,9 @@ def save_weather_to_db(city, weather_data):
 def collect_and_store():
     print(f"Starting data collection and storage...")
     ensure_table()
-    for city, (lat, lon) in CITIES.items():
-        weather_data = get_historical_weather(city, lat, lon, days=14)
-        if weather_data:
+    for city, station in STATIONS.items():
+        weather_data = get_historical_weather(city, station, days=30)
+        if weather_data and weather_data.get("data"):
             save_weather_to_db(city, weather_data)
         else:
             print(f"Failed to retrieve weather data for {city}.")
@@ -152,7 +157,7 @@ def collect_and_store():
 schedule.every().day.at("00:05").do(collect_and_store)
 
 if __name__ == "__main__":
-    print(f"Starting weather collector application...")
+    print(f"Starting Meteostat weather collector application...")
     collect_and_store()
     while True:
         schedule.run_pending()
