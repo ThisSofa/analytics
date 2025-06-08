@@ -81,7 +81,7 @@ services:
       
   collector:
     build:
-      context: ./weather_collector
+      context: ./collector
       dockerfile: Dockerfile
     container_name: weather_collector
     restart: always
