@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 import schedule
 import json
 
+print("Starting weather collector script...")
 load_dotenv()
+print("Environment variables loaded.")
 
 VISUALCROSSING_API_KEY = os.getenv('VISUALCROSSING_API_KEY')
 POSTGRES_HOST = os.getenv('POSTGRES_HOST', 'db')
@@ -15,13 +17,10 @@ POSTGRES_DB = os.getenv('POSTGRES_DB', 'weather')
 POSTGRES_USER = os.getenv('POSTGRES_USER', 'weatheruser')
 POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'weatherpass')
 
-CITIES = {
-    "Kyiv": (50.4501, 30.5234),
-    "Stuttgart": (48.7758, 9.1829),
-    "Paris": (48.8566, 2.3522),
-    "Amsterdam": (52.3676, 4.9041),
-    "Vienna": (48.2082, 16.3738)
-}
+print(f"VISUALCROSSING_API_KEY: {VISUALCROSSING_API_KEY}")
+print(f"POSTGRES_HOST: {POSTGRES_HOST}")
+print(f"POSTGRES_DB: {POSTGRES_DB}")
+print(f"POSTGRES_USER: {POSTGRES_USER}")
 
 def ensure_table():
     """Ensures the weather_history table exists in the database."""
@@ -33,6 +32,7 @@ def ensure_table():
             user=POSTGRES_USER,
             password=POSTGRES_PASSWORD
         )
+        print("Successfully connected to the database.")  # Added log
         cur = conn.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS weather_history (
@@ -52,8 +52,10 @@ def ensure_table():
             );
         """)
         conn.commit()
+        print("Table ensured.")  # Added log
         cur.close()
         conn.close()
+        print("Connection closed.")  # Added log
         print("Table ensured successfully.")
     except Exception as e:
         print(f"Error ensuring table: {e}")
@@ -88,6 +90,7 @@ def save_weather_to_db(city, weather_data):
             user=POSTGRES_USER,
             password=POSTGRES_PASSWORD
         )
+        print("Successfully connected to the database.")  # Added log
         cur = conn.cursor()
 
         for day_data in weather_data["days"]:
@@ -128,12 +131,23 @@ def save_weather_to_db(city, weather_data):
                 continue # Continue to the next day even if one fails
 
         conn.commit()
+        print("Data committed.")  # Added log
         cur.close()
         conn.close()
+        print("Connection closed.")  # Added log
         print("Weather data saved successfully.")
 
     except Exception as e:
         print(f"Error saving weather data: {e}")
+
+# Define the cities and their coordinates
+CITIES = {
+    "Kyiv": (50.4501, 30.5234),
+    "Lviv": (49.8397, 24.0297),
+    "Odesa": (46.4825, 30.7233),
+    "Kharkiv": (49.9935, 36.2304),
+    "Dnipro": (48.4647, 35.0462)
+}
 
 def collect_and_store():
     """Collects and stores weather data for all cities."""
@@ -152,11 +166,12 @@ def collect_and_store():
             print(f"Error processing {city}: {e}")
     print("Data collection and storage complete.")
 
-schedule.every().day.at("00:05").do(collect_and_store)
+# schedule.every().day.at("00:05").do(collect_and_store) # Commented out for debugging
 
 if __name__ == "__main__":
     print("Starting weather collector application...")
-    collect_and_store()
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+    collect_and_store()  # Calling collect_and_store directly for debugging
+    # while True: # Commented out for debugging
+    #     schedule.run_pending()
+    #     time.sleep(60)
+    print("Weather collector finished.") # Added log
