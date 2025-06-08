@@ -94,7 +94,7 @@ def save_weather_to_db(city, weather_data):
         cur = conn.cursor()
         for day_data in weather_data.get("data", []):
             try:
-                dt_str = day_data["date"]
+                dt_str = day_data["date"]  # формат YYYY-MM-DD
                 dt_obj = datetime.strptime(dt_str, "%Y-%m-%d").date()
                 tavg = day_data.get("tavg")
                 tmin = day_data.get("tmin")
@@ -127,7 +127,7 @@ def save_weather_to_db(city, weather_data):
                     json.dumps(day_data)
                 ))
             except Exception as e:
-                print(f"Error inserting data for {city}, date {dt_str}: {e}")
+                print(f"Error inserting data for {city}, date {day_data.get('date')}: {e}")
                 continue
         conn.commit()
         cur.close()
