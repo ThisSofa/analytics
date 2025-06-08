@@ -86,11 +86,11 @@ services:
     container_name: weather_collector
     restart: always
     environment:
-      - OPENWEATHER_API_KEY=$OPENWEATHER_API_KEY
-      - POSTGRES_HOST=postgres
-      - POSTGRES_DB=$POSTGRES_DB
-      - POSTGRES_USER=$POSTGRES_USER
-      - POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - POSTGRES_HOST=${postgres}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     depends_on:
       - postgres
     networks:
