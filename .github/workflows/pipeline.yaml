@@ -1,0 +1,33 @@
+name: Deploy Collector to VM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install SSH key
+        run: |
+          echo "${{ secrets.CI_CD }}" > deploy_key
+          chmod 600 deploy_key
+
+      - name: Deploy collector to server
+        run: |
+          ssh -i deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOF'
+            set -e
+            cd /home/devops/apps/aipd-dev
+            echo "Starting collector deployment..."
+            docker compose build collector
+            docker compose up -d --no-deps --build collector
+            echo "Collector deployed successfully."
+          EOF
+
+      - name: Cleanup
+        run: rm -f deploy_key
