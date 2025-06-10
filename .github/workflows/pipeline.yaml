@@ -18,6 +18,10 @@ jobs:
           printf '%s\n' "${{ secrets.CI_CD }}" > id_ed25519
           chmod 600 id_ed25519
 
+      - name: Test SSH connection (debug)
+        run: |
+          ssh -vvv -i id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} echo "✅ SSH connected"
+
       - name: Deploy collector to server
         run: |
           ssh -i id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOF'
