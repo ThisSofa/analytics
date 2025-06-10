@@ -15,7 +15,7 @@ jobs:
 
       - name: Install SSH key
         run: |
-          echo "${{ secrets.CI_CD }}" > id_ed25519
+          printf '%s\n' "${{ secrets.CI_CD }}" > id_ed25519
           chmod 600 id_ed25519
 
       - name: Deploy collector to server
