@@ -24,7 +24,7 @@ jobs:
         run: |
           ssh -i id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOF'
             set -e
-            cd /home/devops/apps/aipd-dev
+            cd /home/sofa/analytics
             echo "Starting collector deployment..."
             docker compose build collector
             docker compose up -d --no-deps --build collector
