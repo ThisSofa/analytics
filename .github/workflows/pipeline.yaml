@@ -15,14 +15,14 @@ jobs:
 
       - name: Install SSH key
         run: |
-          cat <<EOF > deploy_key
+          cat <<EOF > id_ed25519
           ${{ secrets.CI_CD }}
           EOF
-          chmod 600 deploy_key
+          chmod 600 id_ed25519
 
       - name: Deploy collector to server
         run: |
-          ssh -i deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOF'
+          ssh -i id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOF'
             set -e
             cd /home/devops/apps/aipd-dev
             echo "Starting collector deployment..."
